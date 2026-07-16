@@ -27,7 +27,7 @@ class DocumentService:
             document_id=doc_id,
             path=path,
             page_count=self.adapter.estimate_page_count(path),
-            encrypted=False,
+            encrypted=self.adapter.is_encrypted(path),
             meta={"opened_at": datetime.now(timezone.utc).isoformat()},
         )
         self._sessions[doc_id] = session

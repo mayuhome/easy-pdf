@@ -12,6 +12,9 @@ Provides-Extra: pdf
 Requires-Dist: PyMuPDF>=1.24.5; extra == "pdf"
 Requires-Dist: pikepdf>=9.0.0; extra == "pdf"
 Requires-Dist: opencv-python>=4.10.0.84; extra == "pdf"
+Provides-Extra: gui
+Requires-Dist: PyQt6>=6.6.0; extra == "gui"
+Requires-Dist: PyQt6-sip>=13.6.0; extra == "gui"
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3.1; extra == "dev"
 Requires-Dist: ruff>=0.5.5; extra == "dev"
@@ -62,6 +65,11 @@ easy-pdf health
 easy-pdf health
 easy-pdf open /path/to/file.pdf
 easy-pdf summary doc_123
+easy-pdf save doc_123 /path/to/output.pdf
+
+# task workflow
+easy-pdf task-submit detect doc_123
+easy-pdf task-status task_123
 ```
 
 ## Next Steps

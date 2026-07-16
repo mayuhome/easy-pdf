@@ -23,3 +23,12 @@ class AppContainer:
         self.page_edit_service = PageEditService(self.document_service)
         self.watermark_apply_service = WatermarkApplyService()
         self.task_service = TaskService(self.store)
+
+
+# Alias for GUI usage
+Services = AppContainer
+
+
+def bootstrap(workdir: str | None = None) -> Services:
+    """Bootstrap the application services."""
+    return Services(workdir)

@@ -22,3 +22,9 @@ class CandidateNotFoundError(EasyPdfError):
 
 class TaskNotFoundError(EasyPdfError):
     code = "TASK_001"
+
+
+class PDFOperationError(EasyPdfError):
+    """Error during PDF operations."""
+
+    code = "PDF_001"

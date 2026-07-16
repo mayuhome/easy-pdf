@@ -1,2 +1,3 @@
 [console_scripts]
 easy-pdf = easy_pdf.app:main
+easy-pdf-gui = easy_pdf.gui.main_window:main

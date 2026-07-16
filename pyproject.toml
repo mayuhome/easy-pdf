@@ -22,6 +22,11 @@ pdf = [
   "opencv-python>=4.10.0.84"
 ]
 
+gui = [
+  "PyQt6>=6.6.0",
+  "PyQt6-sip>=13.6.0"
+]
+
 dev = [
   "pytest>=8.3.1",
   "ruff>=0.5.5",
@@ -30,9 +35,10 @@ dev = [
 
 [project.scripts]
 easy-pdf = "easy_pdf.app:main"
+easy-pdf-gui = "easy_pdf.gui.main_window:main"
 
 [tool.setuptools]
-packages = ["easy_pdf"]
+packages = ["easy_pdf", "easy_pdf.gui", "easy_pdf.gui.tabs", "easy_pdf.adapters", "easy_pdf.api", "easy_pdf.domain", "easy_pdf.services", "easy_pdf.storage"]
 
 [tool.ruff]
 line-length = 100
