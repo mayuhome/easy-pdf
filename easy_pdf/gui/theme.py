@@ -96,6 +96,7 @@ QPushButton {
     border: 1px solid #1d4ed8;
     border-radius: 10px;
     padding: 8px 14px;
+    min-height: 34px;
     font-size: 13px;
     font-weight: 600;
 }
@@ -112,6 +113,8 @@ QPushButton:disabled {
     background-color: #94a3b8;
     border-color: #94a3b8;
     color: #f8fafc;
+    min-height: 34px;
+    padding: 8px 14px;
 }
 
 QPushButton#SecondaryBtn {
@@ -131,6 +134,7 @@ QSpinBox {
     border: 1px solid #cbd5e1;
     border-radius: 10px;
     padding: 7px 10px;
+    min-height: 32px;
     selection-background-color: #bfdbfe;
 }
 
@@ -148,6 +152,7 @@ QCheckBox {
     spacing: 8px;
     color: #1e293b;
     font-weight: 500;
+    min-height: 24px;
 }
 
 QCheckBox::indicator {

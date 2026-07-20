@@ -42,6 +42,20 @@ class PdfAdapter:
             data = Path(input_path).read_bytes()
             Path(output_path).write_bytes(data)
 
+    def merge_documents(self, input_paths: list[str], output_path: str) -> None:
+        """Merge multiple PDF files into one output file."""
+        if not input_paths:
+            raise ValueError("No input PDFs provided")
+
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        with fitz.open() as merged:
+            for pdf_path in input_paths:
+                with fitz.open(pdf_path) as src:
+                    merged.insert_pdf(src)
+            merged.save(str(target), garbage=4, deflate=True)
+
     def apply_text_watermark(
         self,
         input_path: str,
@@ -146,6 +160,9 @@ class PdfAdapter:
             for page_index in page_indices:
                 page = doc.load_page(page_index)
                 text_dict = page.get_text("dict")
+                page_rect = page.rect
+                page_center_x = float(page_rect.width) * 0.5
+                page_center_y = float(page_rect.height) * 0.5
                 for block in text_dict.get("blocks", []):
                     if block.get("type") != 0:
                         continue
@@ -154,13 +171,39 @@ class PdfAdapter:
                             text = (span.get("text") or "").strip()
                             if not text:
                                 continue
-                            if not self._looks_like_watermark_text(text):
-                                continue
-                            if float(span.get("size", 0.0)) < size_floor:
-                                continue
 
                             bbox = span.get("bbox")
                             if not bbox or len(bbox) != 4:
+                                continue
+
+                            span_size = float(span.get("size", 0.0))
+                            x0 = float(bbox[0])
+                            y0 = float(bbox[1])
+                            x1 = float(bbox[2])
+                            y1 = float(bbox[3])
+                            span_center_x = (x0 + x1) * 0.5
+                            span_center_y = (y0 + y1) * 0.5
+
+                            looks_like_keyword = self._looks_like_watermark_text(text)
+                            looks_like_large_text = span_size >= max(26.0, size_floor + 8.0)
+
+                            near_center = (
+                                abs(span_center_x - page_center_x) <= page_rect.width * 0.32
+                                and abs(span_center_y - page_center_y) <= page_rect.height * 0.32
+                            )
+
+                            color_int = int(span.get("color", 0))
+                            r = (color_int >> 16) & 0xFF
+                            g = (color_int >> 8) & 0xFF
+                            b = color_int & 0xFF
+                            channel_spread = max(r, g, b) - min(r, g, b)
+                            avg_channel = (r + g + b) / 3.0
+                            light_gray_text = channel_spread <= 24 and avg_channel >= 120
+
+                            keyword_match = looks_like_keyword and span_size >= size_floor
+                            styled_match = looks_like_large_text and near_center and light_gray_text
+
+                            if not (keyword_match or styled_match):
                                 continue
 
                             candidates.append(
@@ -168,10 +211,10 @@ class PdfAdapter:
                                     "page_index": page_index,
                                     "text": text,
                                     "bbox": {
-                                        "x": float(bbox[0]),
-                                        "y": float(bbox[1]),
-                                        "w": float(bbox[2] - bbox[0]),
-                                        "h": float(bbox[3] - bbox[1]),
+                                        "x": x0,
+                                        "y": y0,
+                                        "w": float(x1 - x0),
+                                        "h": float(y1 - y0),
                                     },
                                 }
                             )

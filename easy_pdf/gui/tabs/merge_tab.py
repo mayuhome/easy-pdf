@@ -4,17 +4,18 @@ from typing import Optional
 
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QPushButton,
     QVBoxLayout,
 )
 
 from easy_pdf.gui.tabs.base_tab import BaseTab
-from easy_pdf.gui.widgets import OutputSelector
+from easy_pdf.gui.path_utils import common_parent_dir, next_available_path
+from easy_pdf.gui.widgets import OutputSelector, PdfDropListWidget
 from easy_pdf.gui.worker import PDFWorker
 from easy_pdf.services.bootstrap import Services, bootstrap
 
@@ -44,7 +45,8 @@ class MergeTab(BaseTab):
         list_group = QGroupBox("Step 1 · 选择并排序文件")
         list_layout = QVBoxLayout()
         list_layout.setSpacing(10)
-        self.file_list = QListWidget()
+        self.file_list = PdfDropListWidget()
+        self.file_list.files_dropped.connect(self._on_files_dropped)
         list_layout.addWidget(self.file_list)
 
         button_layout = QHBoxLayout()
@@ -73,6 +75,9 @@ class MergeTab(BaseTab):
         # Output directory
         output_group = QGroupBox("Step 2 · 选择输出目录")
         output_layout = QVBoxLayout()
+        self.save_to_source_cb = QCheckBox("Save to source directory")
+        self.save_to_source_cb.toggled.connect(self._on_save_to_source_toggled)
+        output_layout.addWidget(self.save_to_source_cb)
         self.output_selector = OutputSelector("Output Directory")
         output_layout.addWidget(self.output_selector)
         output_group.setLayout(output_layout)
@@ -99,7 +104,23 @@ class MergeTab(BaseTab):
         """Clear selected files."""
         self.pdf_files.clear()
         self.file_list.clear()
+        if self.save_to_source_cb.isChecked():
+            self.output_selector.path_input.clear()
         self.emit_status("Merge file list cleared")
+
+    @pyqtSlot(bool)
+    def _on_save_to_source_toggled(self, checked: bool) -> None:
+        self.output_selector.setEnabled(not checked)
+        if checked:
+            parent = common_parent_dir(self.pdf_files)
+            if parent:
+                self.output_selector.set_path(parent)
+            else:
+                self.output_selector.path_input.clear()
+
+    @pyqtSlot(list)
+    def _on_files_dropped(self, files: list[Path]) -> None:
+        self._add_pdf_files(files)
 
     def _init_services(self) -> None:
         """Initialize services."""
@@ -115,11 +136,21 @@ class MergeTab(BaseTab):
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select PDF Files", "", "PDF Files (*.pdf);;All Files (*)"
         )
-        for file in files:
-            path = Path(file)
+        self._add_pdf_files([Path(file) for file in files])
+
+    def _add_pdf_files(self, paths: list[Path]) -> None:
+        """Append unique PDF files and keep output dir synced if needed."""
+        for path in paths:
             if path not in self.pdf_files:
                 self.pdf_files.append(path)
                 self.file_list.addItem(path.name)
+
+        if self.save_to_source_cb.isChecked():
+            parent = common_parent_dir(self.pdf_files)
+            if parent:
+                self.output_selector.set_path(parent)
+            else:
+                self.output_selector.path_input.clear()
 
     @pyqtSlot()
     def _on_remove_file(self) -> None:
@@ -170,10 +201,16 @@ class MergeTab(BaseTab):
             self.emit_error("Please add at least one PDF file")
             return
 
-        output_path = self.output_selector.get_path()
-        if not output_path:
-            self.emit_error("Please select an output directory")
-            return
+        if self.save_to_source_cb.isChecked():
+            output_path = common_parent_dir(self.pdf_files)
+            if not output_path:
+                self.emit_error("Save to source directory requires all input PDFs in the same folder")
+                return
+        else:
+            output_path = self.output_selector.get_path()
+            if not output_path:
+                self.emit_error("Please select an output directory")
+                return
 
         self.merge_btn.setEnabled(False)
         self.emit_progress(0)
@@ -191,7 +228,7 @@ class MergeTab(BaseTab):
         if not self.services:
             raise RuntimeError("Services not initialized")
 
-        output_file = output_path / "merged.pdf"
+        output_file = next_available_path(output_path / "merged.pdf")
         self.services.page_edit_service.merge_documents(pdf_files, output_file)
         return output_file
 

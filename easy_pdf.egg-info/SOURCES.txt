@@ -14,6 +14,7 @@ easy_pdf/domain/errors.py
 easy_pdf/domain/models.py
 easy_pdf/gui/__init__.py
 easy_pdf/gui/main_window.py
+easy_pdf/gui/path_utils.py
 easy_pdf/gui/theme.py
 easy_pdf/gui/widgets.py
 easy_pdf/gui/worker.py

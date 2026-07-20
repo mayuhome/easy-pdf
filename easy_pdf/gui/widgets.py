@@ -2,13 +2,15 @@
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QMimeData, pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -24,6 +26,7 @@ class FileSelector(QWidget):
     def __init__(self, label: str = "Select File", file_filter: str = "All Files (*)"):
         super().__init__()
         self.file_filter = file_filter
+        self.setAcceptDrops(True)
         self._init_ui(label)
 
     def _init_ui(self, label: str) -> None:
@@ -59,6 +62,72 @@ class FileSelector(QWidget):
             path = Path(file_path)
             self.path_input.setText(str(path))
             self.file_selected.emit(path)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accept a single local file drag."""
+        mime = event.mimeData()
+        if self._extract_dropped_path(mime) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Set selected file from dropped path."""
+        path = self._extract_dropped_path(event.mimeData())
+        if path is None:
+            event.ignore()
+            return
+        self.path_input.setText(str(path))
+        self.file_selected.emit(path)
+        event.acceptProposedAction()
+
+    @staticmethod
+    def _extract_dropped_path(mime: QMimeData) -> Optional[Path]:
+        if not mime.hasUrls():
+            return None
+        urls = [url for url in mime.urls() if url.isLocalFile()]
+        if not urls:
+            return None
+        path = Path(urls[0].toLocalFile())
+        return path if path.exists() and path.is_file() else None
+
+
+class PdfDropListWidget(QListWidget):
+    """List widget that accepts drag-and-drop PDF files."""
+
+    files_dropped = pyqtSignal(list)
+
+    def __init__(self):
+        super().__init__()
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        files = self._extract_pdf_paths(event.mimeData())
+        if files:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        files = self._extract_pdf_paths(event.mimeData())
+        if not files:
+            event.ignore()
+            return
+        self.files_dropped.emit(files)
+        event.acceptProposedAction()
+
+    @staticmethod
+    def _extract_pdf_paths(mime: QMimeData) -> list[Path]:
+        if not mime.hasUrls():
+            return []
+        result: list[Path] = []
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            path = Path(url.toLocalFile())
+            if path.exists() and path.is_file() and path.suffix.lower() == ".pdf":
+                result.append(path)
+        return result
 
     def get_path(self) -> Optional[Path]:
         """Get the selected file path."""

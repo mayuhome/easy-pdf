@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from easy_pdf.gui.tabs.base_tab import BaseTab
+from easy_pdf.gui.path_utils import next_available_path
 from easy_pdf.gui.widgets import OutputSelector, WatermarkPanel
 from easy_pdf.gui.worker import PDFWorker
 from easy_pdf.services.bootstrap import Services, bootstrap
@@ -75,6 +76,9 @@ class BatchProcessTab(BaseTab):
         # Output directory
         output_group = QGroupBox("Step 3 · 选择输出目录")
         output_layout = QVBoxLayout()
+        self.save_to_source_cb = QCheckBox("Save to source directory")
+        self.save_to_source_cb.toggled.connect(self._on_save_to_source_toggled)
+        output_layout.addWidget(self.save_to_source_cb)
         self.output_selector = OutputSelector("Output Directory")
         output_layout.addWidget(self.output_selector)
         output_group.setLayout(output_layout)
@@ -102,6 +106,8 @@ class BatchProcessTab(BaseTab):
         self.input_directory = None
         self.input_path_display.clear()
         self.output_selector.path_input.clear()
+        self.save_to_source_cb.setChecked(False)
+        self.output_selector.setEnabled(True)
         self.apply_watermark_cb.setChecked(True)
         self.watermark_panel.set_watermark_config("", 0.28, 48)
         self.emit_status("Batch form reset")
@@ -121,6 +127,14 @@ class BatchProcessTab(BaseTab):
         if dir_path:
             self.input_directory = Path(dir_path)
             self.input_path_display.setText(str(self.input_directory))
+            if self.save_to_source_cb.isChecked():
+                self.output_selector.set_path(self.input_directory)
+
+    @pyqtSlot(bool)
+    def _on_save_to_source_toggled(self, checked: bool) -> None:
+        self.output_selector.setEnabled(not checked)
+        if checked and self.input_directory:
+            self.output_selector.set_path(self.input_directory)
 
     @pyqtSlot(bool)
     def _on_watermark_toggled(self, checked: bool) -> None:
@@ -138,10 +152,13 @@ class BatchProcessTab(BaseTab):
             self.emit_error("Please select a valid input directory")
             return
 
-        output_path = self.output_selector.get_path()
-        if not output_path:
-            self.emit_error("Please select an output directory")
-            return
+        if self.save_to_source_cb.isChecked():
+            output_path = self.input_directory
+        else:
+            output_path = self.output_selector.get_path()
+            if not output_path:
+                self.emit_error("Please select an output directory")
+                return
 
         # Get PDF files
         pdf_files = list(self.input_directory.glob("*.pdf"))
@@ -183,7 +200,7 @@ class BatchProcessTab(BaseTab):
         for idx, pdf_file in enumerate(pdf_files):
             try:
                 if watermark_config:
-                    output_file = output_path / f"{pdf_file.stem}_watermarked.pdf"
+                    output_file = next_available_path(output_path / f"{pdf_file.stem}_watermarked.pdf")
                     self.services.watermark_service.apply_to_document(
                         input_file=pdf_file,
                         output_file=output_file,
@@ -193,7 +210,7 @@ class BatchProcessTab(BaseTab):
                     )
                 else:
                     # Just copy the file
-                    output_file = output_path / pdf_file.name
+                    output_file = next_available_path(output_path / pdf_file.name)
                     output_file.write_bytes(pdf_file.read_bytes())
 
                 processed_count += 1

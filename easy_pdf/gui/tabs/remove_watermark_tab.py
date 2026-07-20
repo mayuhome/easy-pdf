@@ -7,6 +7,7 @@ from typing import Optional
 
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from easy_pdf.gui.tabs.base_tab import BaseTab
+from easy_pdf.gui.path_utils import next_available_path
 from easy_pdf.gui.widgets import FileSelector, OutputSelector
 from easy_pdf.gui.worker import PDFWorker
 from easy_pdf.services.bootstrap import Services, bootstrap
@@ -51,6 +53,7 @@ class RemoveWatermarkTab(BaseTab):
         source_group = QGroupBox("Step 1 · 选择 PDF 文件")
         source_layout = QVBoxLayout()
         self.file_selector = FileSelector("PDF File", "PDF Files (*.pdf);;All Files (*)")
+        self.file_selector.file_selected.connect(self._on_input_file_selected)
         source_layout.addWidget(self.file_selector)
         source_group.setLayout(source_layout)
         layout.addWidget(source_group)
@@ -71,6 +74,9 @@ class RemoveWatermarkTab(BaseTab):
 
         output_group = QGroupBox("Step 3 · 选择输出目录")
         output_layout = QVBoxLayout()
+        self.save_to_source_cb = QCheckBox("Save to source directory")
+        self.save_to_source_cb.toggled.connect(self._on_save_to_source_toggled)
+        output_layout.addWidget(self.save_to_source_cb)
         self.output_selector = OutputSelector("Output Directory")
         output_layout.addWidget(self.output_selector)
         output_group.setLayout(output_layout)
@@ -109,9 +115,24 @@ class RemoveWatermarkTab(BaseTab):
     def _on_reset(self) -> None:
         self.file_selector.path_input.clear()
         self.output_selector.path_input.clear()
+        self.save_to_source_cb.setChecked(False)
+        self.output_selector.setEnabled(True)
         self.sensitivity_spin.setValue(3)
         self.result_list.clear()
         self.emit_status("Remove watermark form reset")
+
+    @pyqtSlot(Path)
+    def _on_input_file_selected(self, path: Path) -> None:
+        if self.save_to_source_cb.isChecked():
+            self.output_selector.set_path(path.parent)
+
+    @pyqtSlot(bool)
+    def _on_save_to_source_toggled(self, checked: bool) -> None:
+        self.output_selector.setEnabled(not checked)
+        if checked:
+            input_path = self.file_selector.get_path()
+            if input_path:
+                self.output_selector.set_path(input_path.parent)
 
     @pyqtSlot()
     def _on_remove(self) -> None:
@@ -130,6 +151,9 @@ class RemoveWatermarkTab(BaseTab):
         if not output_path:
             self.emit_error("Please select an output directory")
             return
+
+        if self.save_to_source_cb.isChecked() and input_path:
+            output_path = input_path.parent
 
         self.remove_btn.setEnabled(False)
         self.result_list.clear()
@@ -155,7 +179,7 @@ class RemoveWatermarkTab(BaseTab):
         self.emit_progress(10)
 
         src_doc = self.services.document_service.open_document(str(input_path))
-        cleaned_file = output_path / f"{input_path.stem}_cleaned.pdf"
+        cleaned_file = next_available_path(output_path / f"{input_path.stem}_cleaned.pdf")
         self.services.document_service.save_document(
             document_id=src_doc.document_id,
             output_path=str(cleaned_file),

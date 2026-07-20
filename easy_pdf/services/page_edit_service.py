@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import uuid4
 
 from easy_pdf.domain.models import OperationResult
@@ -26,3 +27,14 @@ class PageEditService:
             success=True,
             changed_pages=len(set(pages)),
         )
+
+    def merge_documents(self, input_paths: list[Path], output_path: Path) -> Path:
+        """Merge input PDFs into output PDF path and return output path."""
+        if not input_paths:
+            raise ValueError("No PDF files to merge")
+
+        self.document_service.adapter.merge_documents(
+            input_paths=[str(path) for path in input_paths],
+            output_path=str(output_path),
+        )
+        return output_path

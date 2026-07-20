@@ -5,6 +5,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QGroupBox,
     QHBoxLayout,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from easy_pdf.gui.tabs.base_tab import BaseTab
+from easy_pdf.gui.path_utils import next_available_path
 from easy_pdf.gui.widgets import FileSelector, OutputSelector, WatermarkPanel
 from easy_pdf.gui.worker import PDFWorker
 from easy_pdf.services.bootstrap import Services, bootstrap
@@ -43,6 +45,7 @@ class WatermarkTab(BaseTab):
         source_group = QGroupBox("Step 1 · 选择 PDF 文件")
         source_layout = QVBoxLayout()
         self.file_selector = FileSelector("PDF File", "PDF Files (*.pdf);;All Files (*)")
+        self.file_selector.file_selected.connect(self._on_input_file_selected)
         source_layout.addWidget(self.file_selector)
         source_group.setLayout(source_layout)
         layout.addWidget(source_group)
@@ -58,6 +61,9 @@ class WatermarkTab(BaseTab):
         # Output directory
         output_group = QGroupBox("Step 3 · 选择输出目录")
         output_layout = QVBoxLayout()
+        self.save_to_source_cb = QCheckBox("Save to source directory")
+        self.save_to_source_cb.toggled.connect(self._on_save_to_source_toggled)
+        output_layout.addWidget(self.save_to_source_cb)
         self.output_selector = OutputSelector("Output Directory")
         output_layout.addWidget(self.output_selector)
         output_group.setLayout(output_layout)
@@ -88,8 +94,23 @@ class WatermarkTab(BaseTab):
         """Reset form inputs."""
         self.file_selector.path_input.clear()
         self.output_selector.path_input.clear()
+        self.save_to_source_cb.setChecked(False)
+        self.output_selector.setEnabled(True)
         self.watermark_panel.set_watermark_config("", 0.28, 48)
         self.emit_status("Watermark form reset")
+
+    @pyqtSlot(Path)
+    def _on_input_file_selected(self, path: Path) -> None:
+        if self.save_to_source_cb.isChecked():
+            self.output_selector.set_path(path.parent)
+
+    @pyqtSlot(bool)
+    def _on_save_to_source_toggled(self, checked: bool) -> None:
+        self.output_selector.setEnabled(not checked)
+        if checked:
+            input_path = self.file_selector.get_path()
+            if input_path:
+                self.output_selector.set_path(input_path.parent)
 
     @pyqtSlot()
     def _on_preview(self) -> None:
@@ -205,6 +226,9 @@ class WatermarkTab(BaseTab):
             self.emit_error("Please select an output directory")
             return
 
+        if self.save_to_source_cb.isChecked() and input_path:
+            output_path = input_path.parent
+
         watermark_config = self.watermark_panel.get_watermark_config()
 
         if not watermark_config["text"]:
@@ -235,7 +259,7 @@ class WatermarkTab(BaseTab):
         if not self.services:
             raise RuntimeError("Services not initialized")
 
-        output_file = output_path / f"{input_path.stem}_watermarked.pdf"
+        output_file = next_available_path(output_path / f"{input_path.stem}_watermarked.pdf")
         self.services.watermark_service.apply_to_document(
             input_file=input_path,
             output_file=output_file,
