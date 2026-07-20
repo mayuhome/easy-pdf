@@ -3,9 +3,12 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
+    QDialog,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QVBoxLayout,
 )
@@ -13,7 +16,7 @@ from PyQt6.QtWidgets import (
 from easy_pdf.gui.tabs.base_tab import BaseTab
 from easy_pdf.gui.widgets import FileSelector, OutputSelector, WatermarkPanel
 from easy_pdf.gui.worker import PDFWorker
-from easy_pdf.services.bootstrap import Services
+from easy_pdf.services.bootstrap import Services, bootstrap
 
 
 class WatermarkTab(BaseTab):
@@ -29,35 +32,157 @@ class WatermarkTab(BaseTab):
     def _init_ui(self) -> None:
         """Initialize the user interface."""
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        intro = QLabel("为单个 PDF 添加文字水印，保持原文件不变并输出新文件。")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
 
         # File selector
-        self.file_selector = FileSelector("PDF File:", "PDF Files (*.pdf);;All Files (*)")
-        layout.addWidget(self.file_selector)
+        source_group = QGroupBox("Step 1 · 选择 PDF 文件")
+        source_layout = QVBoxLayout()
+        self.file_selector = FileSelector("PDF File", "PDF Files (*.pdf);;All Files (*)")
+        source_layout.addWidget(self.file_selector)
+        source_group.setLayout(source_layout)
+        layout.addWidget(source_group)
 
         # Watermark settings
+        watermark_group = QGroupBox("Step 2 · 设置水印")
+        watermark_layout = QVBoxLayout()
         self.watermark_panel = WatermarkPanel()
-        layout.addWidget(self.watermark_panel)
+        watermark_layout.addWidget(self.watermark_panel)
+        watermark_group.setLayout(watermark_layout)
+        layout.addWidget(watermark_group)
 
         # Output directory
-        self.output_selector = OutputSelector("Output Directory:")
-        layout.addWidget(self.output_selector)
+        output_group = QGroupBox("Step 3 · 选择输出目录")
+        output_layout = QVBoxLayout()
+        self.output_selector = OutputSelector("Output Directory")
+        output_layout.addWidget(self.output_selector)
+        output_group.setLayout(output_layout)
+        layout.addWidget(output_group)
 
         # Buttons
         button_layout = QHBoxLayout()
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setObjectName("SecondaryBtn")
+        self.reset_btn.clicked.connect(self._on_reset)
+        self.preview_btn = QPushButton("Preview")
+        self.preview_btn.setObjectName("SecondaryBtn")
+        self.preview_btn.clicked.connect(self._on_preview)
         self.apply_btn = QPushButton("Apply Watermark")
         self.apply_btn.clicked.connect(self._on_apply)
+        button_layout.setSpacing(8)
+        button_layout.addWidget(self.reset_btn)
+        button_layout.addWidget(self.preview_btn)
         button_layout.addStretch()
         button_layout.addWidget(self.apply_btn)
-        button_layout.addStretch()
         layout.addLayout(button_layout)
 
         layout.addStretch()
         self.setLayout(layout)
 
+    @pyqtSlot()
+    def _on_reset(self) -> None:
+        """Reset form inputs."""
+        self.file_selector.path_input.clear()
+        self.output_selector.path_input.clear()
+        self.watermark_panel.set_watermark_config("", 0.28, 48)
+        self.emit_status("Watermark form reset")
+
+    @pyqtSlot()
+    def _on_preview(self) -> None:
+        """Preview watermark style with current settings."""
+        config = self.watermark_panel.get_watermark_config()
+        text = config["text"].strip()
+        if not text:
+            self.emit_error("Please enter watermark text before preview")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Watermark Preview")
+        dialog.setMinimumSize(620, 780)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        info = QLabel("Preview style: diagonal, light gray, large-size watermark")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        preview_label = QLabel()
+        preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview_label.setPixmap(
+            self._build_preview_pixmap(
+                text=text,
+                opacity=config["opacity"],
+                font_size=config["font_size"],
+            )
+        )
+        layout.addWidget(preview_label)
+
+        dialog.setLayout(layout)
+        dialog.exec()
+
+    def _build_preview_pixmap(self, text: str, opacity: float, font_size: int) -> QPixmap:
+        """Render a simple visual preview using current watermark settings."""
+        width = 560
+        height = 740
+        pixmap = QPixmap(width, height)
+        pixmap.fill(QColor("#f8fafc"))
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Page-like canvas area
+        page_x = 30
+        page_y = 20
+        page_w = width - 60
+        page_h = height - 40
+        painter.setPen(QPen(QColor("#d1d5db"), 1))
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawRect(page_x, page_y, page_w, page_h)
+
+        clamped_opacity = min(0.6, max(0.12, float(opacity)))
+        adaptive_font = max(28, int(font_size))
+        adaptive_font = min(adaptive_font, 120)
+
+        painter.save()
+        center_x = page_x + page_w // 2
+        center_y = page_y + page_h // 2
+        painter.translate(center_x, center_y)
+        painter.rotate(-35)
+        painter.shear(-0.28, 0)
+
+        font = QFont("Times New Roman", adaptive_font)
+        font.setItalic(True)
+        painter.setFont(font)
+
+        color = QColor("#b8b8b8")
+        color.setAlphaF(clamped_opacity)
+        painter.setPen(color)
+
+        text_rect_w = int(page_w * 1.25)
+        text_rect_h = int(page_h * 0.35)
+        painter.drawText(
+            -text_rect_w // 2,
+            -text_rect_h // 2,
+            text_rect_w,
+            text_rect_h,
+            Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+            text,
+        )
+        painter.restore()
+
+        painter.end()
+        return pixmap
+
     def _init_services(self) -> None:
         """Initialize services."""
         try:
-            self.services = Services.bootstrap()
+            self.services = bootstrap()
             self.emit_status("Watermark service ready")
         except Exception as e:
             self.emit_error(f"Failed to initialize services: {str(e)}")
@@ -115,6 +240,8 @@ class WatermarkTab(BaseTab):
             input_file=input_path,
             output_file=output_file,
             text=config["text"],
+            opacity=config["opacity"],
+            font_size=config["font_size"],
         )
         return output_file
 

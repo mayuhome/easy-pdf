@@ -37,6 +37,34 @@ pip install -e .[pdf]
 easy-pdf health
 ```
 
+## Build Package
+
+Use the build script to generate both wheel and source distribution:
+
+```bash
+cd /Users/majade/projects/easy-pdf
+chmod +x scripts/build.sh
+./scripts/build.sh
+```
+
+Artifacts are generated under `dist/`.
+
+## Release Check
+
+Run end-to-end release validation (tests + build + clean install smoke check):
+
+```bash
+cd /Users/majade/projects/easy-pdf
+chmod +x scripts/release.sh
+./scripts/release.sh
+```
+
+Optional: skip tests if you only need packaging verification:
+
+```bash
+./scripts/release.sh --skip-tests
+```
+
 ## CLI Examples
 
 ```bash

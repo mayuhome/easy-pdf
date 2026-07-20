@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,96 @@ class PdfAdapter:
             # Keep a robust fallback path for malformed files.
             data = Path(input_path).read_bytes()
             Path(output_path).write_bytes(data)
+
+    def apply_text_watermark(
+        self,
+        input_path: str,
+        output_path: str,
+        text: str,
+        opacity: float = 0.5,
+        font_size: int = 24,
+    ) -> None:
+        """Write a text watermark to each page and save to a new file."""
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        safe_opacity = min(0.6, max(0.12, float(opacity)))
+        safe_font_size = max(20.0, float(font_size))
+        font_name, font_file = self._pick_watermark_font(text)
+        clean_text = text.strip()
+        if not clean_text:
+            raise ValueError("Watermark text must not be empty")
+
+        # Keep real output direction identical to preview: bottom-left -> top-right.
+        angle_deg = -35.0
+        angle_rad = math.radians(abs(angle_deg))
+        cos_a = abs(math.cos(angle_rad))
+        sin_a = abs(math.sin(angle_rad))
+        margin_ratio = 0.08
+
+        font = fitz.Font(fontname=font_name, fontfile=font_file)
+
+        with fitz.open(input_path) as doc:
+            for page in doc:
+                page_w = float(page.rect.width)
+                page_h = float(page.rect.height)
+                max_rot_w = page_w * (1.0 - margin_ratio * 2.0)
+                max_rot_h = page_h * (1.0 - margin_ratio * 2.0)
+
+                # Start from requested size, then shrink to fit transformed bounds.
+                watermark_size = min(safe_font_size, min(page_w, page_h) * 0.28)
+                watermark_size = max(20.0, watermark_size)
+
+                text_w = font.text_length(clean_text, fontsize=watermark_size)
+                text_h = watermark_size
+                rot_w = text_w * cos_a + text_h * sin_a
+                rot_h = text_w * sin_a + text_h * cos_a
+
+                fit_scale = min(
+                    1.0,
+                    max_rot_w / max(rot_w, 1e-6),
+                    max_rot_h / max(rot_h, 1e-6),
+                )
+                watermark_size = max(12.0, watermark_size * fit_scale)
+
+                text_w = font.text_length(clean_text, fontsize=watermark_size)
+                center = fitz.Point(page_w * 0.5, page_h * 0.5)
+                point = fitz.Point(center.x - text_w * 0.5, center.y + watermark_size * 0.35)
+                morph_matrix = fitz.Matrix(1, 1).prerotate(angle_deg)
+                page.insert_text(
+                    point,
+                    clean_text,
+                    fontsize=watermark_size,
+                    fontname=font_name,
+                    fontfile=font_file,
+                    color=(0.72, 0.72, 0.72),
+                    fill_opacity=safe_opacity,
+                    morph=(center, morph_matrix),
+                    overlay=True,
+                )
+            doc.save(str(target), garbage=4, deflate=True)
+
+    @staticmethod
+    def _pick_watermark_font(text: str) -> tuple[str, str | None]:
+        """Pick a font that can render user text reliably, including CJK on macOS."""
+        has_non_ascii = any(ord(ch) > 127 for ch in text)
+        if not has_non_ascii:
+            # Built-in Times-Italic for common Latin text.
+            return "tiro", None
+
+        # Prefer common macOS CJK fonts to avoid "..." when rendering Chinese text.
+        candidates = [
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+        ]
+        for candidate in candidates:
+            if Path(candidate).exists():
+                return "cjk", candidate
+
+        # Fallback for environments without the CJK system fonts above.
+        return "helv", None
 
     def scan_text_watermark_candidates(
         self,

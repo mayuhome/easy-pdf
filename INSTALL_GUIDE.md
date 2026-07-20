@@ -11,6 +11,63 @@
 - **wheel 包**: `dist/easy_pdf-0.1.0-py3-none-any.whl` (推荐用于安装)
 - **源代码包**: `dist/easy_pdf-0.1.0.tar.gz` (可用于源代码分发)
 
+## 🏗️ Build 步骤（新增）
+
+### 方式 A：使用一键脚本（推荐）
+
+```bash
+cd /Users/majade/projects/easy-pdf
+chmod +x scripts/build.sh
+./scripts/build.sh
+```
+
+脚本会自动完成以下事情：
+
+- 创建独立构建虚拟环境 `.build-venv`
+- 升级 `pip/setuptools/wheel/build`
+- 清理旧产物（`build/`、`dist/`、`*.egg-info`）
+- 生成新的 `wheel` 和 `sdist`
+
+### 方式 B：手工构建（等价流程）
+
+```bash
+cd /Users/majade/projects/easy-pdf
+
+python3 -m venv .build-venv
+source .build-venv/bin/activate
+
+python -m pip install --upgrade pip setuptools wheel build
+rm -rf build dist *.egg-info
+python -m build
+```
+
+构建完成后，产物位于 `dist/` 目录。
+
+## 🚢 发布前检查（Release 脚本）
+
+新增 `scripts/release.sh`，用于发布前的一键检查。
+
+```bash
+cd /Users/majade/projects/easy-pdf
+chmod +x scripts/release.sh
+./scripts/release.sh
+```
+
+脚本会执行：
+
+- 创建/复用 `.release-venv`
+- 安装开发与运行依赖（含 `dev,pdf,gui`）
+- 运行 `pytest`
+- 调用 `./scripts/build.sh` 生成发布产物
+- 创建全新 `.release-smoke-venv` 安装 wheel
+- 验证 `easy-pdf` / `easy-pdf-gui` 入口与 GUI 模块导入
+
+如果只想验证打包和安装，不跑测试：
+
+```bash
+./scripts/release.sh --skip-tests
+```
+
 ## 🚀 快速开始（推荐方式）
 
 ### 1️⃣ macOS / Linux
@@ -183,12 +240,29 @@ sudo dnf install qt6-qtbase
 rm -rf build dist *.egg-info
 
 # 重新构建
-python -m build
+./scripts/build.sh
 
 # 在新虚拟环境中安装
 python3 -m venv fresh_env
 source fresh_env/bin/activate
 pip install dist/easy_pdf-0.1.0-py3-none-any.whl[pdf,gui]
+```
+
+### 问题: `easy-pdf-gui: command not found`
+**原因**: 当前 shell 没有激活安装该包的虚拟环境。
+
+**解决**:
+```bash
+# 先激活你安装 easy-pdf 的虚拟环境
+source test_env/bin/activate
+
+# 再运行
+easy-pdf-gui
+```
+
+或者直接使用绝对路径执行：
+```bash
+/Users/majade/projects/easy-pdf/test_env/bin/easy-pdf-gui
 ```
 
 ## 📚 相关文档

@@ -2,10 +2,11 @@
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -16,7 +17,7 @@ from PyQt6.QtWidgets import (
 from easy_pdf.gui.tabs.base_tab import BaseTab
 from easy_pdf.gui.widgets import OutputSelector, WatermarkPanel
 from easy_pdf.gui.worker import PDFWorker
-from easy_pdf.services.bootstrap import Services
+from easy_pdf.services.bootstrap import Services, bootstrap
 
 
 class BatchProcessTab(BaseTab):
@@ -33,20 +34,33 @@ class BatchProcessTab(BaseTab):
     def _init_ui(self) -> None:
         """Initialize the user interface."""
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        intro = QLabel("批量处理整个目录内的 PDF，可选择是否统一添加水印。")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
 
         # Input directory selector
+        input_group = QGroupBox("Step 1 · 选择输入目录")
         input_layout = QHBoxLayout()
-        input_layout.addWidget(QLabel("Input Directory:"))
+        input_layout.setSpacing(8)
+        input_layout.addWidget(QLabel("Input Directory"))
         self.input_path_display = QLineEdit()
         self.input_path_display.setReadOnly(True)
+        self.input_path_display.setPlaceholderText("No directory selected")
         input_layout.addWidget(self.input_path_display)
         self.input_browse_btn = QPushButton("Browse...")
+        self.input_browse_btn.setObjectName("SecondaryBtn")
         self.input_browse_btn.clicked.connect(self._on_browse_input)
         input_layout.addWidget(self.input_browse_btn)
-        layout.addLayout(input_layout)
+        input_group.setLayout(input_layout)
+        layout.addWidget(input_group)
 
         # Options
+        options_group = QGroupBox("Step 2 · 处理选项")
         options_layout = QVBoxLayout()
+        options_layout.setSpacing(10)
         self.apply_watermark_cb = QCheckBox("Apply Watermark to All PDFs")
         self.apply_watermark_cb.setChecked(True)
         self.apply_watermark_cb.toggled.connect(self._on_watermark_toggled)
@@ -55,29 +69,47 @@ class BatchProcessTab(BaseTab):
         # Watermark settings (conditional)
         self.watermark_panel = WatermarkPanel()
         options_layout.addWidget(self.watermark_panel)
-
-        layout.addLayout(options_layout)
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
 
         # Output directory
-        self.output_selector = OutputSelector("Output Directory:")
-        layout.addWidget(self.output_selector)
+        output_group = QGroupBox("Step 3 · 选择输出目录")
+        output_layout = QVBoxLayout()
+        self.output_selector = OutputSelector("Output Directory")
+        output_layout.addWidget(self.output_selector)
+        output_group.setLayout(output_layout)
+        layout.addWidget(output_group)
 
         # Process button
         process_layout = QHBoxLayout()
+        process_layout.setSpacing(8)
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setObjectName("SecondaryBtn")
+        self.reset_btn.clicked.connect(self._on_reset)
         self.process_btn = QPushButton("Start Batch Processing")
         self.process_btn.clicked.connect(self._on_process)
+        process_layout.addWidget(self.reset_btn)
         process_layout.addStretch()
         process_layout.addWidget(self.process_btn)
-        process_layout.addStretch()
         layout.addLayout(process_layout)
 
         layout.addStretch()
         self.setLayout(layout)
 
+    @pyqtSlot()
+    def _on_reset(self) -> None:
+        """Reset form inputs."""
+        self.input_directory = None
+        self.input_path_display.clear()
+        self.output_selector.path_input.clear()
+        self.apply_watermark_cb.setChecked(True)
+        self.watermark_panel.set_watermark_config("", 0.28, 48)
+        self.emit_status("Batch form reset")
+
     def _init_services(self) -> None:
         """Initialize services."""
         try:
-            self.services = Services.bootstrap()
+            self.services = bootstrap()
             self.emit_status("Batch processing service ready")
         except Exception as e:
             self.emit_error(f"Failed to initialize services: {str(e)}")
@@ -156,6 +188,8 @@ class BatchProcessTab(BaseTab):
                         input_file=pdf_file,
                         output_file=output_file,
                         text=watermark_config["text"],
+                        opacity=watermark_config["opacity"],
+                        font_size=watermark_config["font_size"],
                     )
                 else:
                     # Just copy the file

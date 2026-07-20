@@ -14,12 +14,14 @@ easy_pdf/domain/errors.py
 easy_pdf/domain/models.py
 easy_pdf/gui/__init__.py
 easy_pdf/gui/main_window.py
+easy_pdf/gui/theme.py
 easy_pdf/gui/widgets.py
 easy_pdf/gui/worker.py
 easy_pdf/gui/tabs/__init__.py
 easy_pdf/gui/tabs/base_tab.py
 easy_pdf/gui/tabs/batch_tab.py
 easy_pdf/gui/tabs/merge_tab.py
+easy_pdf/gui/tabs/remove_watermark_tab.py
 easy_pdf/gui/tabs/watermark_tab.py
 easy_pdf/services/bootstrap.py
 easy_pdf/services/document_service.py

@@ -1,11 +1,9 @@
 """Main window for the PDF toolkit GUI application."""
-from pathlib import Path
-from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -17,7 +15,9 @@ from PyQt6.QtWidgets import (
 
 from easy_pdf.gui.tabs.batch_tab import BatchProcessTab
 from easy_pdf.gui.tabs.merge_tab import MergeTab
+from easy_pdf.gui.tabs.remove_watermark_tab import RemoveWatermarkTab
 from easy_pdf.gui.tabs.watermark_tab import WatermarkTab
+from easy_pdf.gui.theme import app_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -26,31 +26,63 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Easy PDF - PDF Toolkit")
-        self.setGeometry(100, 100, 1000, 700)
+        self.setMinimumSize(1020, 720)
         self._init_ui()
 
     def _init_ui(self) -> None:
         """Initialize the user interface."""
+        self.setStyleSheet(app_stylesheet())
+
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(14)
+
+        header = QWidget()
+        header.setObjectName("AppHeader")
+        header_layout = QVBoxLayout()
+        header_layout.setContentsMargins(18, 14, 18, 14)
+        header_layout.setSpacing(4)
+
+        header_title = QLabel("Easy PDF Toolkit")
+        header_title.setObjectName("HeaderTitle")
+        header_subtitle = QLabel("快速完成水印、合并与批量处理")
+        header_subtitle.setObjectName("HeaderSubtitle")
+
+        header_layout.addWidget(header_title)
+        header_layout.addWidget(header_subtitle)
+        header.setLayout(header_layout)
+        layout.addWidget(header)
+
+        tab_card = QWidget()
+        tab_card.setObjectName("PageCard")
+        tab_card_layout = QVBoxLayout()
+        tab_card_layout.setContentsMargins(16, 16, 16, 14)
+        tab_card_layout.setSpacing(10)
 
         # Tab widget
         self.tab_widget = QTabWidget()
         self.watermark_tab = WatermarkTab()
+        self.remove_watermark_tab = RemoveWatermarkTab()
         self.merge_tab = MergeTab()
         self.batch_tab = BatchProcessTab()
 
         self.tab_widget.addTab(self.watermark_tab, "Add Watermark")
+        self.tab_widget.addTab(self.remove_watermark_tab, "Remove Watermark")
         self.tab_widget.addTab(self.merge_tab, "Merge PDFs")
         self.tab_widget.addTab(self.batch_tab, "Batch Process")
 
-        layout.addWidget(self.tab_widget)
+        tab_card_layout.addWidget(self.tab_widget)
+        tab_card.setLayout(tab_card_layout)
+
+        layout.addWidget(tab_card)
 
         # Progress bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setFormat("%p%")
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
 
@@ -69,6 +101,10 @@ class MainWindow(QMainWindow):
         self.merge_tab.status_changed.connect(self._on_status_changed)
         self.merge_tab.progress_changed.connect(self._on_progress_changed)
         self.merge_tab.error_occurred.connect(self._on_error)
+
+        self.remove_watermark_tab.status_changed.connect(self._on_status_changed)
+        self.remove_watermark_tab.progress_changed.connect(self._on_progress_changed)
+        self.remove_watermark_tab.error_occurred.connect(self._on_error)
 
         self.batch_tab.status_changed.connect(self._on_status_changed)
         self.batch_tab.progress_changed.connect(self._on_progress_changed)

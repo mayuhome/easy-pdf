@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 import hashlib
+from pathlib import Path
 from uuid import uuid4
 
 from easy_pdf.domain.errors import CandidateNotFoundError
@@ -51,6 +52,26 @@ class WatermarkService:
 
         self._candidate_index[document_id] = candidates
         return candidates
+
+    def apply_to_document(
+        self,
+        input_file: Path | str,
+        output_file: Path | str,
+        text: str,
+        opacity: float = 0.5,
+        font_size: int = 24,
+    ) -> None:
+        """Apply a text watermark to all pages and save to output file."""
+        if not text.strip():
+            raise ValueError("Watermark text must not be empty")
+
+        self.document_service.adapter.apply_text_watermark(
+            input_path=str(input_file),
+            output_path=str(output_file),
+            text=text,
+            opacity=opacity,
+            font_size=font_size,
+        )
 
     def remove_watermarks(
         self,

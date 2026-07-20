@@ -2,7 +2,7 @@
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QFileDialog,
     QGroupBox,
@@ -27,18 +27,27 @@ class FileSelector(QWidget):
         self._init_ui(label)
 
     def _init_ui(self, label: str) -> None:
-        layout = QHBoxLayout()
+        layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
 
         label_widget = QLabel(label)
+        label_widget.setObjectName("StepTitle")
         self.path_input = QLineEdit()
         self.path_input.setReadOnly(True)
+        self.path_input.setPlaceholderText("No file selected")
         self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setObjectName("SecondaryBtn")
         self.browse_btn.clicked.connect(self._browse)
 
-        layout.addWidget(label_widget, 0)
-        layout.addWidget(self.path_input, 1)
-        layout.addWidget(self.browse_btn, 0)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(self.path_input, 1)
+        row.addWidget(self.browse_btn, 0)
+
+        layout.addWidget(label_widget)
+        layout.addLayout(row)
 
         self.setLayout(layout)
 
@@ -71,18 +80,27 @@ class OutputSelector(QWidget):
         self._init_ui(label)
 
     def _init_ui(self, label: str) -> None:
-        layout = QHBoxLayout()
+        layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
 
         label_widget = QLabel(label)
+        label_widget.setObjectName("StepTitle")
         self.path_input = QLineEdit()
         self.path_input.setReadOnly(True)
+        self.path_input.setPlaceholderText("No directory selected")
         self.browse_btn = QPushButton("Browse...")
+        self.browse_btn.setObjectName("SecondaryBtn")
         self.browse_btn.clicked.connect(self._browse)
 
-        layout.addWidget(label_widget, 0)
-        layout.addWidget(self.path_input, 1)
-        layout.addWidget(self.browse_btn, 0)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(self.path_input, 1)
+        row.addWidget(self.browse_btn, 0)
+
+        layout.addWidget(label_widget)
+        layout.addLayout(row)
 
         self.setLayout(layout)
 
@@ -112,9 +130,11 @@ class WatermarkPanel(QGroupBox):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout()
+        layout.setSpacing(10)
 
         # Text input
         text_layout = QHBoxLayout()
+        text_layout.setSpacing(8)
         text_layout.addWidget(QLabel("Text:"))
         self.text_input = QLineEdit()
         self.text_input.setPlaceholderText("Enter watermark text")
@@ -127,8 +147,9 @@ class WatermarkPanel(QGroupBox):
         self.opacity_spin = QSpinBox()
         self.opacity_spin.setMinimum(10)
         self.opacity_spin.setMaximum(100)
-        self.opacity_spin.setValue(50)
+        self.opacity_spin.setValue(28)
         self.opacity_spin.setSuffix("%")
+        self.opacity_spin.setMinimumWidth(120)
         opacity_layout.addWidget(self.opacity_spin)
         opacity_layout.addStretch()
         layout.addLayout(opacity_layout)
@@ -138,8 +159,9 @@ class WatermarkPanel(QGroupBox):
         size_layout.addWidget(QLabel("Font Size:"))
         self.size_spin = QSpinBox()
         self.size_spin.setMinimum(8)
-        self.size_spin.setMaximum(72)
-        self.size_spin.setValue(24)
+        self.size_spin.setMaximum(120)
+        self.size_spin.setValue(48)
+        self.size_spin.setMinimumWidth(120)
         size_layout.addWidget(self.size_spin)
         size_layout.addStretch()
         layout.addLayout(size_layout)
@@ -154,7 +176,7 @@ class WatermarkPanel(QGroupBox):
             "font_size": self.size_spin.value(),
         }
 
-    def set_watermark_config(self, text: str, opacity: float = 0.5, font_size: int = 24) -> None:
+    def set_watermark_config(self, text: str, opacity: float = 0.28, font_size: int = 48) -> None:
         """Set watermark configuration."""
         self.text_input.setText(text)
         self.opacity_spin.setValue(int(opacity * 100))
