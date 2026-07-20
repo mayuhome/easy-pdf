@@ -91,6 +91,15 @@ class FileSelector(QWidget):
         path = Path(urls[0].toLocalFile())
         return path if path.exists() and path.is_file() else None
 
+    def get_path(self) -> Optional[Path]:
+        """Get the selected file path."""
+        text = self.path_input.text()
+        return Path(text) if text else None
+
+    def set_path(self, path: Path) -> None:
+        """Set the file path."""
+        self.path_input.setText(str(path))
+
 
 class PdfDropListWidget(QListWidget):
     """List widget that accepts drag-and-drop PDF files."""
@@ -128,15 +137,6 @@ class PdfDropListWidget(QListWidget):
             if path.exists() and path.is_file() and path.suffix.lower() == ".pdf":
                 result.append(path)
         return result
-
-    def get_path(self) -> Optional[Path]:
-        """Get the selected file path."""
-        text = self.path_input.text()
-        return Path(text) if text else None
-
-    def set_path(self, path: Path) -> None:
-        """Set the file path."""
-        self.path_input.setText(str(path))
 
 
 class OutputSelector(QWidget):

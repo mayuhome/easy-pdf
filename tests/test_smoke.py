@@ -58,3 +58,29 @@ def test_detect_and_remove_watermark_on_real_pdf(tmp_path: Path) -> None:
     )
     assert result.success is True
     assert result.changed_pages >= 1
+
+
+def test_detect_and_remove_structural_watermark_on_sample_pdf(tmp_path: Path) -> None:
+    source_pdf = Path("tests/test-doc/56-危机十年轮回，新一轮危机悄悄来临-gz111678 .pdf")
+    pdf_path = tmp_path / "sample-watermark.pdf"
+    pdf_path.write_bytes(source_pdf.read_bytes())
+
+    container = AppContainer(workdir=str(tmp_path / "work"))
+    opened = container.document_service.open_document(str(pdf_path))
+
+    candidates = container.watermark_service.detect_watermarks(opened.document_id)
+    repeated_text_candidates = [candidate for candidate in candidates if candidate.kind.value == "text"]
+    form_candidates = [candidate for candidate in candidates if candidate.kind.value == "form"]
+    assert repeated_text_candidates, "Expected repeated text watermark candidates"
+    assert form_candidates, "Expected structural watermark candidates"
+
+    result = container.watermark_service.remove_watermarks(
+        opened.document_id,
+        candidate_ids=[candidate.candidate_id for candidate in form_candidates],
+    )
+    assert result.success is True
+    assert result.changed_pages >= 1
+
+    reopened = container.document_service.open_document(str(pdf_path))
+    remaining = container.watermark_service.detect_watermarks(reopened.document_id)
+    assert not [candidate for candidate in remaining if candidate.kind.value == "form"]

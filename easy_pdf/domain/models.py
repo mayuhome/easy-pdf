@@ -10,6 +10,7 @@ class WatermarkKind(str, Enum):
     IMAGE = "image"
     ANNOTATION = "annotation"
     RASTER = "raster"
+    FORM = "form"
 
 
 class TaskStatus(str, Enum):
@@ -45,6 +46,7 @@ class WatermarkCandidate:
     bbox: Rect
     confidence: float
     removable: bool
+    preview_text: str = ""
     pattern_group_id: str | None = None
 
 

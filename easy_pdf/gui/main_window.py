@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from easy_pdf import __bugfix__, __version__
 from easy_pdf.gui.tabs.batch_tab import BatchProcessTab
 from easy_pdf.gui.tabs.merge_tab import MergeTab
 from easy_pdf.gui.tabs.remove_watermark_tab import RemoveWatermarkTab
@@ -25,7 +26,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Easy PDF - PDF Toolkit")
+        self.setWindowTitle(f"Easy PDF - PDF Toolkit [{__bugfix__}]")
         self.setMinimumSize(1020, 720)
         self._init_ui()
 
@@ -86,12 +87,16 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
 
+        self.footer_label = QLabel(f"Build {__version__} · {__bugfix__}")
+        self.footer_label.setObjectName("FooterLabel")
+        layout.addWidget(self.footer_label)
+
         central_widget.setLayout(layout)
 
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+        self.status_bar.showMessage(f"Ready · {__bugfix__}")
 
         # Connect signals
         self.watermark_tab.status_changed.connect(self._on_status_changed)

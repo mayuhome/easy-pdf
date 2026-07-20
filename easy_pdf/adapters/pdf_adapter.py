@@ -155,6 +155,7 @@ class PdfAdapter:
         """Return watermark-like text candidates with bbox for each scanned page."""
         size_floor = max(10.0, 24.0 - float(sensitivity * 2))
         candidates: list[dict[str, Any]] = []
+        seen_keys: set[tuple[int, str, float, float, float, float]] = set()
 
         with fitz.open(path) as doc:
             for page_index in page_indices:
@@ -167,6 +168,37 @@ class PdfAdapter:
                     if block.get("type") != 0:
                         continue
                     for line in block.get("lines", []):
+                        line_spans = line.get("spans", [])
+                        line_text = "".join((span.get("text") or "") for span in line_spans).strip()
+                        line_bbox = line.get("bbox")
+                        if line_text and line_bbox and len(line_bbox) == 4:
+                            lx0 = float(line_bbox[0])
+                            ly0 = float(line_bbox[1])
+                            lx1 = float(line_bbox[2])
+                            ly1 = float(line_bbox[3])
+                            near_edge = (
+                                ly0 <= page_rect.height * 0.18
+                                or ly1 >= page_rect.height * 0.82
+                            )
+                            if near_edge and len(line_text) >= 8:
+                                self._append_text_candidate(
+                                    candidates,
+                                    seen_keys,
+                                    {
+                                        "page_index": page_index,
+                                        "text": line_text,
+                                        "bbox": {
+                                            "x": lx0,
+                                            "y": ly0,
+                                            "w": float(lx1 - lx0),
+                                            "h": float(ly1 - ly0),
+                                        },
+                                        "source": "line",
+                                        "near_edge": True,
+                                        "page_height": float(page_rect.height),
+                                    },
+                                )
+
                         for span in line.get("spans", []):
                             text = (span.get("text") or "").strip()
                             if not text:
@@ -206,7 +238,9 @@ class PdfAdapter:
                             if not (keyword_match or styled_match):
                                 continue
 
-                            candidates.append(
+                            self._append_text_candidate(
+                                candidates,
+                                seen_keys,
                                 {
                                     "page_index": page_index,
                                     "text": text,
@@ -216,8 +250,45 @@ class PdfAdapter:
                                         "w": float(x1 - x0),
                                         "h": float(y1 - y0),
                                     },
+                                    "source": "span",
+                                    "near_edge": False,
+                                    "page_height": float(page_rect.height),
                                 }
                             )
+        return candidates
+
+    def scan_structural_watermark_candidates(
+        self,
+        path: str,
+        page_indices: list[int],
+    ) -> list[dict[str, Any]]:
+        """Return watermark candidates backed by dedicated PDF form objects."""
+        candidates: list[dict[str, Any]] = []
+
+        with pikepdf.open(path) as pdf:
+            for page_index in page_indices:
+                page = pdf.pages[page_index]
+                page_rect = self._page_rect_from_pdf_page(page)
+                resources = page.obj.get("/Resources", pikepdf.Dictionary())
+                xobjects = resources.get("/XObject", pikepdf.Dictionary())
+                for name, ref in xobjects.items():
+                    if not self._is_watermark_xobject(ref):
+                        continue
+
+                    candidates.append(
+                        {
+                            "page_index": page_index,
+                            "kind": "form",
+                            "text": self._watermark_label(ref),
+                            "bbox": {
+                                "x": float(page_rect[0]),
+                                "y": float(page_rect[1]),
+                                "w": float(page_rect[2] - page_rect[0]),
+                                "h": float(page_rect[3] - page_rect[1]),
+                            },
+                            "xobject_name": str(name),
+                        }
+                    )
         return candidates
 
     def redact_regions_inplace(self, path: str, regions: dict[int, list[dict[str, float]]]) -> int:
@@ -247,6 +318,39 @@ class PdfAdapter:
             Path(temp_path).replace(target)
         return changed_pages
 
+    def remove_watermark_xobjects_inplace(self, path: str, targets: dict[int, list[str]]) -> int:
+        """Remove watermark form XObject invocations from selected pages."""
+        changed_pages = 0
+        target = Path(path)
+        temp_path = str(target.with_suffix(target.suffix + ".tmp"))
+
+        with pikepdf.open(path) as pdf:
+            for page_index, names in targets.items():
+                if not names:
+                    continue
+
+                page = pdf.pages[page_index]
+                remove_names = {self._ensure_pdf_name(name) for name in names}
+                page_changed = self._remove_xobject_invocations(pdf, page, remove_names)
+
+                resources = page.obj.get("/Resources", pikepdf.Dictionary())
+                xobjects = resources.get("/XObject", None)
+                if xobjects is not None:
+                    for name in list(remove_names):
+                        if name in xobjects:
+                            del xobjects[name]
+                            page_changed = True
+
+                if page_changed:
+                    changed_pages += 1
+
+            if changed_pages:
+                pdf.save(temp_path)
+
+        if changed_pages:
+            Path(temp_path).replace(target)
+        return changed_pages
+
     def _looks_like_watermark_text(self, text: str) -> bool:
         lowered = text.lower()
         if any(token in lowered for token in self.DEFAULT_MARKER_WORDS):
@@ -257,3 +361,130 @@ class PdfAdapter:
             if upper_ratio > 0.8:
                 return True
         return False
+
+    @staticmethod
+    def _ensure_pdf_name(name: str | pikepdf.Name) -> pikepdf.Name:
+        token = str(name)
+        if not token.startswith("/"):
+            token = f"/{token}"
+        return pikepdf.Name(token)
+
+    @staticmethod
+    def _page_rect_from_pdf_page(page: pikepdf.Page) -> tuple[float, float, float, float]:
+        media_box = page.obj.get("/CropBox", page.obj.get("/MediaBox"))
+        if media_box is None or len(media_box) != 4:
+            return (0.0, 0.0, 0.0, 0.0)
+        return tuple(float(value) for value in media_box)
+
+    @classmethod
+    def _is_watermark_xobject(cls, obj: pikepdf.Object) -> bool:
+        if obj.get("/Subtype", None) != "/Form":
+            return False
+
+        piece_info = obj.get("/PieceInfo", None)
+        if piece_info is not None:
+            compound = piece_info.get("/ADBE_CompoundType", None)
+            if cls._object_mentions_watermark(compound):
+                return True
+
+        oc = obj.get("/OC", None)
+        if cls._object_mentions_watermark(oc):
+            return True
+
+        return False
+
+    @classmethod
+    def _watermark_label(cls, obj: pikepdf.Object) -> str:
+        oc = obj.get("/OC", None)
+        if oc is not None:
+            name = cls._extract_watermark_name(oc)
+            if name:
+                return name
+        return "Watermark"
+
+    @classmethod
+    def _extract_watermark_name(cls, obj: pikepdf.Object | None) -> str | None:
+        if obj is None:
+            return None
+
+        if isinstance(obj, pikepdf.Dictionary):
+            raw_name = obj.get("/Name", None)
+            if raw_name is not None:
+                text = cls._normalize_pdf_token(raw_name)
+                if text:
+                    return text
+
+            ocgs = obj.get("/OCGs", None)
+            if isinstance(ocgs, pikepdf.Dictionary):
+                return cls._extract_watermark_name(ocgs)
+            if isinstance(ocgs, pikepdf.Array):
+                for item in ocgs:
+                    label = cls._extract_watermark_name(item)
+                    if label:
+                        return label
+        return None
+
+    @classmethod
+    def _object_mentions_watermark(cls, obj: pikepdf.Object | None) -> bool:
+        if obj is None:
+            return False
+
+        if isinstance(obj, pikepdf.Dictionary):
+            for _, value in obj.items():
+                if cls._object_mentions_watermark(value):
+                    return True
+            return False
+
+        if isinstance(obj, pikepdf.Array):
+            return any(cls._object_mentions_watermark(item) for item in obj)
+
+        return "watermark" in cls._normalize_pdf_token(obj).lower()
+
+    @staticmethod
+    def _normalize_pdf_token(value: Any) -> str:
+        text = str(value)
+        return text[1:] if text.startswith("/") else text
+
+    @staticmethod
+    def _append_text_candidate(
+        candidates: list[dict[str, Any]],
+        seen_keys: set[tuple[int, str, float, float, float, float]],
+        item: dict[str, Any],
+    ) -> None:
+        bbox = item["bbox"]
+        key = (
+            int(item["page_index"]),
+            " ".join(str(item["text"]).split()),
+            round(float(bbox["x"]), 2),
+            round(float(bbox["y"]), 2),
+            round(float(bbox["w"]), 2),
+            round(float(bbox["h"]), 2),
+        )
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        candidates.append(item)
+
+    @staticmethod
+    def _remove_xobject_invocations(
+        pdf: pikepdf.Pdf,
+        page: pikepdf.Page,
+        remove_names: set[pikepdf.Name],
+    ) -> bool:
+        instructions = pikepdf.parse_content_stream(page)
+        filtered: list[pikepdf.ContentStreamInstruction] = []
+        changed = False
+
+        for instruction in instructions:
+            if (
+                str(instruction.operator) == "Do"
+                and instruction.operands
+                and instruction.operands[0] in remove_names
+            ):
+                changed = True
+                continue
+            filtered.append(instruction)
+
+        if changed:
+            page.obj["/Contents"] = pdf.make_stream(pikepdf.unparse_content_stream(filtered))
+        return changed

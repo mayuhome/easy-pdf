@@ -72,6 +72,7 @@ def detect(document_id: str, mode: str = "hybrid", page_range: str = "1-*", sens
                         "bbox": {"x": c.bbox.x, "y": c.bbox.y, "w": c.bbox.w, "h": c.bbox.h},
                         "confidence": c.confidence,
                         "removable": c.removable,
+                        "previewText": c.preview_text,
                         "patternGroupId": c.pattern_group_id,
                     }
                     for c in result

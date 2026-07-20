@@ -9,7 +9,7 @@ QMainWindow {
 }
 
 QWidget {
-    font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    font-family: "PingFang SC", "Helvetica Neue", "Arial", sans-serif;
     color: #0f172a;
     font-size: 13px;
 }
@@ -29,6 +29,12 @@ QLabel#HeaderTitle {
 QLabel#HeaderSubtitle {
     font-size: 13px;
     color: #475569;
+}
+
+QLabel#FooterLabel {
+    color: #64748b;
+    font-size: 12px;
+    padding: 2px 6px 0 6px;
 }
 
 QWidget#PageCard {
@@ -146,6 +152,80 @@ QSpinBox:focus {
 
 QListWidget {
     min-height: 180px;
+}
+
+QListWidget::item {
+    border: none;
+    padding: 0;
+}
+
+QWidget#DetectionRow,
+QWidget#DetectionInfoRow {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+QLabel#DetectionRowLabel,
+QLabel#DetectionInfoLabel {
+    color: #0f172a;
+}
+
+QLabel#DetectionPreviewBadge {
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QCheckBox#DetectionRowCheckbox {
+    spacing: 0;
+    min-height: 18px;
+}
+
+QListWidget QScrollBar:vertical {
+    background: #f1f5f9;
+    width: 12px;
+    margin: 6px 2px 6px 2px;
+    border-radius: 6px;
+}
+
+QListWidget QScrollBar::handle:vertical {
+    background: #94a3b8;
+    min-height: 28px;
+    border-radius: 6px;
+}
+
+QListWidget QScrollBar::handle:vertical:hover {
+    background: #64748b;
+}
+
+QListWidget QScrollBar:horizontal {
+    background: #f1f5f9;
+    height: 12px;
+    margin: 2px 6px 2px 6px;
+    border-radius: 6px;
+}
+
+QListWidget QScrollBar::handle:horizontal {
+    background: #94a3b8;
+    min-width: 28px;
+    border-radius: 6px;
+}
+
+QListWidget QScrollBar::handle:horizontal:hover {
+    background: #64748b;
+}
+
+QListWidget QScrollBar::add-line,
+QListWidget QScrollBar::sub-line,
+QListWidget QScrollBar::add-page,
+QListWidget QScrollBar::sub-page {
+    background: transparent;
+    border: none;
 }
 
 QCheckBox {
